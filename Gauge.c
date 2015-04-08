@@ -66,7 +66,7 @@ Byte2Baud(uint8_t input)
 	return BaseBaud;
 }
 
-//This function transmits the RGB command to all of LEDs.
+//This function transmits the RGP command to all of LEDs.
 // 3-baud instructions for WS2812:
 //   0: ^__  (low)
 //   1: ^^_  (HIGH)
@@ -103,22 +103,101 @@ LED_RING_ALL(uint32_t LEDnum, uint32_t Red, uint32_t Green, uint32_t Blue)
 		}
 }
 
+void
+LED_RING_Percent(uint32_t LEDnum, uint8_t Start, uint8_t End, uint32_t Red, uint32_t Green, uint32_t Blue, uint32_t BG_Red, uint32_t BG_Green, uint32_t BG_Blue)
+{
+	int8_t LEDIdx;
+	uint8_t LEDtxIdx;
+	int8_t buffer[144]; // = (LEDnum*9)
+
+	// Create Color Bauds for Display Color
+	uint32_t RedBaud = Byte2Baud(Red);
+	uint32_t GreenBaud = Byte2Baud(Green);
+	uint32_t BlueBaud = Byte2Baud(Blue);
+
+	// Create Color Bauds for the Background Color
+	uint32_t BG_RedBaud = Byte2Baud(BG_Red);
+	uint32_t BG_GreenBaud = Byte2Baud(BG_Green);
+	uint32_t BG_BlueBaud = Byte2Baud(BG_Blue);
+
+	// Select Start and End LEDs
+	uint8_t StartLED = Start/(256/LEDnum);
+	uint8_t EndLED = End/(256/LEDnum);
+
+	// Write the first to Start Color
+	for( LEDIdx=0; LEDIdx < (StartLED-1); LEDIdx++ ) {
+		buffer[(LEDIdx*9)]     = (BG_GreenBaud>>16);
+		buffer[((LEDIdx*9)+1)] = (BG_GreenBaud>>8);
+		buffer[((LEDIdx*9)+2)] = (BG_GreenBaud);
+		buffer[((LEDIdx*9)+3)] = (BG_RedBaud>>16);
+		buffer[((LEDIdx*9)+4)] = (BG_RedBaud>>8);
+		buffer[((LEDIdx*9)+5)] = (BG_RedBaud);
+		buffer[((LEDIdx*9)+6)] = (BG_BlueBaud>>16);
+		buffer[((LEDIdx*9)+7)] = (BG_BlueBaud>>8);
+		buffer[((LEDIdx*9)+8)] = (BG_BlueBaud);
+	}
+	// Write the Start To End Color
+	for( LEDIdx=StartLED; LEDIdx < (EndLED+1); LEDIdx++ ) {
+		buffer[(LEDIdx*9)]     = (GreenBaud>>16);
+		buffer[((LEDIdx*9)+1)] = (GreenBaud>>8);
+		buffer[((LEDIdx*9)+2)] = (GreenBaud);
+		buffer[((LEDIdx*9)+3)] = (RedBaud>>16);
+		buffer[((LEDIdx*9)+4)] = (RedBaud>>8);
+		buffer[((LEDIdx*9)+5)] = (RedBaud);
+		buffer[((LEDIdx*9)+6)] = (BlueBaud>>16);
+		buffer[((LEDIdx*9)+7)] = (BlueBaud>>8);
+		buffer[((LEDIdx*9)+8)] = (BlueBaud);
+	}
+	// Write the End To Last Color
+	for( LEDIdx=(EndLED+1); LEDIdx < (LEDnum+1); LEDIdx++ ) {
+		buffer[(LEDIdx*9)]     = (BG_GreenBaud>>16);
+		buffer[((LEDIdx*9)+1)] = (BG_GreenBaud>>8);
+		buffer[((LEDIdx*9)+2)] = (BG_GreenBaud);
+		buffer[((LEDIdx*9)+3)] = (BG_RedBaud>>16);
+		buffer[((LEDIdx*9)+4)] = (BG_RedBaud>>8);
+		buffer[((LEDIdx*9)+5)] = (BG_RedBaud);
+		buffer[((LEDIdx*9)+6)] = (BG_BlueBaud>>16);
+		buffer[((LEDIdx*9)+7)] = (BG_BlueBaud>>8);
+		buffer[((LEDIdx*9)+8)] = (BG_BlueBaud);
+	}
+
+
+	// Wait until SSI0_BASE is ready to send bytes
+	while(SSIBusy( SSI0_BASE ));
+
+	for(LEDtxIdx = 0; LEDtxIdx < (LEDnum*9); LEDtxIdx++) {
+		uint8_t data = buffer[LEDtxIdx];
+		SSIDataPut( SSI0_BASE, data);
+	}
+}
+
 int main()
 {
+	uint8_t Start = 1;
+	uint8_t End = 128;
 	uint32_t LEDnum = 16; //number of LED's
+
+	// Foreground Color
 	uint32_t Green = 0x00;
-	uint32_t Red = 0x55;
-	uint32_t Blue = 0xAA;
+	uint32_t Red = 0x00;
+	uint32_t Blue = 0x20;
+
+	// Background Color
+	uint32_t BG_Green = 0x00;
+	uint32_t BG_Red = 0x08;
+	uint32_t BG_Blue = 0x00;
 
 	setup();
 
 	while(1){
 
-		Green = Green+1;
-		Red = Red+1;
-		Blue = Blue+1;
+		//Color changing to detect updates
+		//Green = Green+1;
+		//Red = Red+1;
+		//Blue = Blue+1;
+		End = End+1;
 
-		LED_RING_ALL(LEDnum, Red, Green, Blue);
+		LED_RING_Percent(LEDnum, Start, End, Red, Green, Blue, BG_Red, BG_Green, BG_Blue);
 		SysCtlDelay(100000);
 	}
 }
